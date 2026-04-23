@@ -67,7 +67,7 @@
             <div class="song-actions" v-if="isOwner">
               <button 
                 class="btn btn-sm btn-danger"
-                @click="removeSong(song)"
+                @click="handleRemoveSong(song)"
               >
                 移除
               </button>
@@ -236,7 +236,12 @@ const route = useRoute()
 const router = useRouter()
 const { get: getPlaylist, getSongs, addSong, removeSong, updatePositions, update: updatePlaylistApi, delete: deletePlaylistApi, copy } = usePlaylistsApi()
 const { list: listSongs } = useSongsApi()
-const { formatDuration } = useApi()
+
+const formatDuration = (seconds: number): string => {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
 
 const songListRef = ref<HTMLElement | null>(null)
 const playlist = ref<Playlist | null>(null)
@@ -349,7 +354,7 @@ const addSongToPlaylist = async (song: Song) => {
   }
 }
 
-const removeSong = async (song: PlaylistSongDetail) => {
+const handleRemoveSong = async (song: PlaylistSongDetail) => {
   if (!confirm(`确定要从播放列表中移除 "${song.name}" 吗？`)) {
     return
   }
