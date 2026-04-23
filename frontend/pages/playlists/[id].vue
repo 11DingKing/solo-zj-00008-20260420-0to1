@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div v-if="loading" class="loading">
+    <div v-if="pending" class="loading">
       <div class="spinner"></div>
     </div>
 
@@ -225,6 +225,13 @@ interface PlaylistSongDetail {
   position: number
 }
 
+interface PlaylistDetail {
+  playlist: Playlist | null
+  songs: PlaylistSongDetail[]
+  totalDuration: number
+  isOwner: boolean
+}
+
 const route = useRoute()
 const router = useRouter()
 const { get: getPlaylist, getSongs, addSong, removeSong, updatePositions, update: updatePlaylistApi, delete: deletePlaylistApi, copy } = usePlaylistsApi()
@@ -235,7 +242,6 @@ const songListRef = ref<HTMLElement | null>(null)
 const playlist = ref<Playlist | null>(null)
 const songs = ref<PlaylistSongDetail[]>([])
 const totalDuration = ref(0)
-const loading = ref(true)
 const error = ref('')
 const isOwner = ref(false)
 
@@ -259,19 +265,23 @@ const editForm = ref({
 
 const currentUserId = 1
 
-const loadPlaylist = async () => {
-  loading.value = true
-  error.value = ''
+const fetchPlaylistDetail = async (id: number): Promise<PlaylistDetail> => {
+  const result: PlaylistDetail = {
+    playlist: null,
+    songs: [],
+    totalDuration: 0,
+    isOwner: false,
+  }
 
   try {
     const [playlistRes, songsRes] = await Promise.all([
-      getPlaylist(playlistId.value),
-      getSongs(playlistId.value),
+      getPlaylist(id),
+      getSongs(id),
     ])
 
     if (playlistRes.success && playlistRes.data) {
-      playlist.value = playlistRes.data
-      isOwner.value = playlistRes.data.owner_id === currentUserId
+      result.playlist = playlistRes.data
+      result.isOwner = playlistRes.data.owner_id === currentUserId
       
       editForm.value = {
         name: playlistRes.data.name,
@@ -283,15 +293,33 @@ const loadPlaylist = async () => {
     }
 
     if (songsRes.success && songsRes.data) {
-      songs.value = songsRes.data.songs
-      totalDuration.value = songsRes.data.total_duration
+      result.songs = songsRes.data.songs
+      result.totalDuration = songsRes.data.total_duration
     }
   } catch (err) {
     error.value = '加载数据时出错'
-  } finally {
-    loading.value = false
   }
+
+  return result
 }
+
+const { data: playlistData, pending, refresh } = await useAsyncData(
+  'playlistDetail',
+  () => fetchPlaylistDetail(playlistId.value),
+  { 
+    server: true,
+    watch: [playlistId]
+  }
+)
+
+watchEffect(() => {
+  if (playlistData.value) {
+    playlist.value = playlistData.value.playlist
+    songs.value = playlistData.value.songs
+    totalDuration.value = playlistData.value.totalDuration
+    isOwner.value = playlistData.value.isOwner
+  }
+})
 
 const searchAvailableSongs = async () => {
   loadingAvailableSongs.value = true
@@ -312,7 +340,7 @@ const addSongToPlaylist = async (song: Song) => {
   try {
     const response = await addSong(playlistId.value, song.id)
     if (response.success) {
-      await loadPlaylist()
+      await refresh()
     } else {
       alert(response.error || '添加失败')
     }
@@ -329,7 +357,7 @@ const removeSong = async (song: PlaylistSongDetail) => {
   try {
     const response = await removeSong(playlistId.value, song.song_id)
     if (response.success) {
-      await loadPlaylist()
+      await refresh()
     } else {
       alert(response.error || '移除失败')
     }
@@ -349,7 +377,7 @@ const updatePlaylist = async () => {
     const response = await updatePlaylistApi(playlistId.value, editForm.value)
     if (response.success) {
       showEditModal.value = false
-      await loadPlaylist()
+      await refresh()
     } else {
       alert(response.error || '更新失败')
     }
@@ -398,14 +426,6 @@ watch(() => showAddSongModal.value, (val) => {
     addSongSearch.value = ''
     searchAvailableSongs()
   }
-})
-
-onMounted(() => {
-  loadPlaylist()
-})
-
-watch(playlistId, () => {
-  loadPlaylist()
 })
 
 if (import.meta.client) {

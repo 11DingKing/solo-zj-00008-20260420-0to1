@@ -17,7 +17,7 @@
       />
     </div>
 
-    <div v-if="loading" class="loading">
+    <div v-if="pending" class="loading">
       <div class="spinner"></div>
     </div>
 
@@ -213,7 +213,6 @@ const { list: listSongs, create, update, delete: deleteSongApi } = useSongsApi()
 const { formatDuration } = useApi()
 
 const songs = ref<Song[]>([])
-const loading = ref(true)
 const searchQuery = ref('')
 const searchTimeout = ref<NodeJS.Timeout | null>(null)
 
@@ -238,26 +237,33 @@ const defaultSongForm = {
 
 const songForm = ref({ ...defaultSongForm })
 
-const loadSongs = async (search?: string) => {
-  loading.value = true
-  try {
-    const response = await listSongs(search)
-    if (response.success && response.data) {
-      songs.value = response.data
-    }
-  } catch (error) {
-    console.error('Failed to load songs:', error)
-  } finally {
-    loading.value = false
+const fetchSongs = async (search?: string) => {
+  const response = await listSongs(search)
+  if (response.success && response.data) {
+    return response.data
   }
+  return []
 }
+
+const { data: songsData, pending, refresh } = await useAsyncData(
+  'songs',
+  () => fetchSongs(),
+  { server: true }
+)
+
+watchEffect(() => {
+  if (songsData.value) {
+    songs.value = songsData.value
+  }
+})
 
 const debouncedSearch = () => {
   if (searchTimeout.value) {
     clearTimeout(searchTimeout.value)
   }
-  searchTimeout.value = setTimeout(() => {
-    loadSongs(searchQuery.value)
+  searchTimeout.value = setTimeout(async () => {
+    const result = await fetchSongs(searchQuery.value)
+    songs.value = result
   }, 300)
 }
 
@@ -308,7 +314,7 @@ const submitSong = async () => {
 
     if (response.success) {
       closeModals()
-      await loadSongs(searchQuery.value)
+      await refresh()
     } else {
       formError.value = response.error || '保存失败'
     }
@@ -329,7 +335,7 @@ const confirmDelete = async () => {
     if (response.success) {
       showDeleteConfirm.value = false
       songToDelete.value = null
-      await loadSongs(searchQuery.value)
+      await refresh()
     } else {
       alert(response.error || '删除失败')
     }
@@ -339,8 +345,4 @@ const confirmDelete = async () => {
     deleting.value = false
   }
 }
-
-onMounted(() => {
-  loadSongs()
-})
 </script>

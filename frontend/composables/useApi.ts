@@ -31,29 +31,26 @@ interface ApiResponse<T = unknown> {
   error?: string
 }
 
-const useApi = () => {
-  const config = useRuntimeConfig()
-  const baseUrl = import.meta.server ? config.apiBase : config.public.apiBase
+const BASE_URL = '/api'
 
+const useApi = () => {
   const request = async <T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> => {
     try {
-      const response = await fetch(`${baseUrl}${endpoint}`, {
+      const response = await $fetch<ApiResponse<T>>(`${BASE_URL}${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers,
+          ...options.headers as Record<string, string>,
         },
       })
-
-      const data = await response.json() as ApiResponse<T>
-      return data
-    } catch (error) {
+      return response
+    } catch (error: any) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Network error',
+        error: error?.data?.error || error?.message || 'Network error',
       }
     }
   }
@@ -63,13 +60,13 @@ const useApi = () => {
   const post = <T>(endpoint: string, body: unknown) =>
     request<T>(endpoint, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body,
     })
 
   const put = <T>(endpoint: string, body: unknown) =>
     request<T>(endpoint, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body,
     })
 
   const del = <T>(endpoint: string) =>
