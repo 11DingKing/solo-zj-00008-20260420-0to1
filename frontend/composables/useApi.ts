@@ -33,7 +33,7 @@ interface ApiResponse<T = unknown> {
 
 const useApi = () => {
   const config = useRuntimeConfig()
-  const baseUrl = config.public.apiBase
+  const baseUrl = import.meta.server ? config.apiBase : config.public.apiBase
 
   const request = async <T>(
     endpoint: string,
