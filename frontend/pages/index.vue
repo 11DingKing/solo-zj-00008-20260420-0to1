@@ -57,10 +57,11 @@
           v-for="playlist in popularPlaylists" 
           :key="playlist.id"
           class="playlist-card"
+          @click="goToPlaylist(playlist.id)"
         >
           <div class="playlist-cover" style="background: linear-gradient(135deg, #ff6b6b, #feca57);">
             🔥
-            <div class="play-btn"></div>
+            <div class="play-btn" @click.stop="goToPlaylist(playlist.id)"></div>
           </div>
           <div class="playlist-name">{{ playlist.name }}</div>
           <div class="playlist-info">

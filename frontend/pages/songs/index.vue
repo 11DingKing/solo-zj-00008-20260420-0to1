@@ -28,34 +28,33 @@
     </div>
 
     <div v-else class="card">
-      <div class="song-item song-item-header">
-        <div></div>
-        <div>歌曲名</div>
-        <div>歌手</div>
-        <div>时长</div>
-        <div></div>
+      <div class="song-item song-item-header library-song-item">
+        <div class="song-cover-col"></div>
+        <div class="song-title-col">歌曲名</div>
+        <div class="song-artist-col">歌手</div>
+        <div class="song-album-col">专辑</div>
+        <div class="song-duration-col">时长</div>
+        <div class="song-action-col"></div>
       </div>
 
       <div class="song-list">
         <div 
           v-for="(song, index) in songs" 
           :key="song.id"
-          class="song-item"
+          class="song-item library-song-item"
         >
-          <div class="song-number">{{ index + 1 }}</div>
-          <div class="song-info">
-            <div class="song-cover-small">
-              <img v-if="song.cover_url" :src="song.cover_url" alt="" />
-              <span v-else>🎵</span>
-            </div>
-            <div>
-              <div class="song-name">{{ song.name }}</div>
-              <div class="song-artist">{{ song.album || '未知专辑' }}</div>
-            </div>
+          <div class="song-cover-col song-cover-small">
+            <img v-if="song.cover_url" :src="song.cover_url" alt="" />
+            <span v-else>🎵</span>
           </div>
-          <div class="song-artist">{{ song.artist }}</div>
-          <div class="song-duration">{{ formatDuration(song.duration) }}</div>
-          <div class="song-actions">
+          <div class="song-title-col">
+            <div class="song-name">{{ song.name }}</div>
+            <div class="song-artist-mobile">{{ song.artist }}</div>
+          </div>
+          <div class="song-artist-col">{{ song.artist }}</div>
+          <div class="song-album-col">{{ song.album || '-' }}</div>
+          <div class="song-duration-col">{{ formatDuration(song.duration) }}</div>
+          <div class="song-action-col song-actions">
             <button 
               class="btn btn-sm btn-secondary"
               @click="editSong(song)"
@@ -231,6 +230,7 @@ const songForm = ref({ ...defaultSongForm })
 
 const loadSongs = async (search?: string) => {
   loading.value = true
+  songs.value = []
   try {
     const response = await songsApi.list(search)
     if (response.success && response.data) {
@@ -335,3 +335,28 @@ onMounted(() => {
   loadSongs()
 })
 </script>
+
+<style scoped>
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+.song-artist-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .song-artist-col,
+  .song-album-col {
+    display: none;
+  }
+  
+  .song-artist-mobile {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+}
+</style>

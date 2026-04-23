@@ -260,7 +260,7 @@ body {
 
 .song-item {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr auto auto;
+  grid-template-columns: 48px 2fr 1fr 1fr 80px 120px;
   gap: 16px;
   align-items: center;
   padding: 12px 16px;
@@ -281,6 +281,54 @@ body {
   letter-spacing: 1px;
 }
 
+.song-item-header.song-item {
+  pointer-events: none;
+}
+
+.song-cover-col {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.song-number-col {
+  width: 40px;
+  text-align: center;
+}
+
+.song-title-col {
+  min-width: 0;
+}
+
+.song-artist-col {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.song-album-col {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+
+.song-duration-col {
+  width: 80px;
+  text-align: right;
+}
+
+.song-action-col {
+  width: 120px;
+  justify-self: end;
+}
+
+.drag-header {
+  width: 24px;
+}
+
 .song-number {
   color: var(--text-secondary);
   font-size: 14px;
@@ -289,6 +337,9 @@ body {
 
 .song-name {
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .song-artist {
@@ -324,6 +375,7 @@ body {
 .drag-handle {
   cursor: grab;
   padding: 4px;
+  width: 24px;
 }
 
 .drag-handle:active {
@@ -333,6 +385,50 @@ body {
 .drag-handle::before {
   content: '⋮⋮';
   color: var(--text-secondary);
+}
+
+.playlist-song-item {
+  grid-template-columns: 24px 40px 2fr 1fr 80px 100px;
+}
+
+.library-song-item {
+  grid-template-columns: 48px 2fr 1fr 1fr 80px 120px;
+}
+
+.selectable .song-item {
+  grid-template-columns: 48px 2fr 1fr 80px 80px;
+}
+
+@media (max-width: 1024px) {
+  .library-song-item {
+    grid-template-columns: 48px 2fr 1fr 80px 120px;
+  }
+  
+  .song-album-col {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .library-song-item {
+    grid-template-columns: 48px 1fr 80px 100px;
+  }
+  
+  .playlist-song-item {
+    grid-template-columns: 24px 40px 1fr 80px 80px;
+  }
+  
+  .song-artist-col {
+    display: none;
+  }
+  
+  .song-action-col {
+    width: 100px;
+  }
+  
+  .song-actions {
+    opacity: 1;
+  }
 }
 
 .modal-overlay {
