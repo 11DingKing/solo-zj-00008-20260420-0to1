@@ -17,7 +17,7 @@
       />
     </div>
 
-    <div v-if="pending" class="loading">
+    <div v-if="loading" class="loading">
       <div class="spinner"></div>
     </div>
 
@@ -199,22 +199,14 @@
 </template>
 
 <script setup lang="ts">
-interface Song {
-  id: number
-  name: string
-  artist: string
-  album: string
-  duration: number
-  cover_url: string
-  audio_file_url: string
-}
+import type { Song } from '~/composables/useApi'
 
-const { list: listSongs, create, update, delete: deleteSongApi } = useSongsApi()
-const { formatDuration } = useApi()
+const songsApi = useSongsApi()
 
 const songs = ref<Song[]>([])
+const loading = ref(true)
 const searchQuery = ref('')
-const searchTimeout = ref<NodeJS.Timeout | null>(null)
+const searchTimeout = ref<number | null>(null)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -237,33 +229,26 @@ const defaultSongForm = {
 
 const songForm = ref({ ...defaultSongForm })
 
-const fetchSongs = async (search?: string) => {
-  const response = await listSongs(search)
-  if (response.success && response.data) {
-    return response.data
+const loadSongs = async (search?: string) => {
+  loading.value = true
+  try {
+    const response = await songsApi.list(search)
+    if (response.success && response.data) {
+      songs.value = response.data
+    }
+  } catch (error) {
+    console.error('Failed to load songs:', error)
+  } finally {
+    loading.value = false
   }
-  return []
 }
-
-const { data: songsData, pending, refresh } = await useAsyncData(
-  'songs',
-  () => fetchSongs(),
-  { server: true }
-)
-
-watchEffect(() => {
-  if (songsData.value) {
-    songs.value = songsData.value
-  }
-})
 
 const debouncedSearch = () => {
   if (searchTimeout.value) {
     clearTimeout(searchTimeout.value)
   }
-  searchTimeout.value = setTimeout(async () => {
-    const result = await fetchSongs(searchQuery.value)
-    songs.value = result
+  searchTimeout.value = window.setTimeout(() => {
+    loadSongs(searchQuery.value)
   }, 300)
 }
 
@@ -307,14 +292,14 @@ const submitSong = async () => {
     let response
     
     if (showEditModal.value && editingSongId.value) {
-      response = await update(editingSongId.value, songForm.value)
+      response = await songsApi.update(editingSongId.value, songForm.value)
     } else {
-      response = await create(songForm.value)
+      response = await songsApi.create(songForm.value)
     }
 
     if (response.success) {
       closeModals()
-      await refresh()
+      await loadSongs(searchQuery.value)
     } else {
       formError.value = response.error || '保存失败'
     }
@@ -331,11 +316,11 @@ const confirmDelete = async () => {
   deleting.value = true
 
   try {
-    const response = await deleteSongApi(songToDelete.value.id)
+    const response = await songsApi.delete(songToDelete.value.id)
     if (response.success) {
       showDeleteConfirm.value = false
       songToDelete.value = null
-      await refresh()
+      await loadSongs(searchQuery.value)
     } else {
       alert(response.error || '删除失败')
     }
@@ -345,4 +330,8 @@ const confirmDelete = async () => {
     deleting.value = false
   }
 }
+
+onMounted(() => {
+  loadSongs()
+})
 </script>

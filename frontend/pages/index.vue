@@ -8,7 +8,7 @@
         </button>
       </div>
       
-      <div v-if="pendingMy" class="loading">
+      <div v-if="loadingMy" class="loading">
         <div class="spinner"></div>
       </div>
       
@@ -43,7 +43,7 @@
         <h2 class="section-title">热门公开列表</h2>
       </div>
       
-      <div v-if="pendingPopular" class="loading">
+      <div v-if="loadingPopular" class="loading">
         <div class="spinner"></div>
       </div>
       
@@ -147,20 +147,16 @@
 </template>
 
 <script setup lang="ts">
-interface Playlist {
-  id: number
-  name: string
-  description: string
-  is_public: boolean
-  owner_id: number
-  song_count?: number
-}
+import type { Playlist } from '~/composables/useApi'
 
-const { getMy, getPopular, create, copy } = usePlaylistsApi()
+const songsApi = useSongsApi()
+const playlistsApi = usePlaylistsApi()
 const router = useRouter()
 
 const myPlaylists = ref<Playlist[]>([])
 const popularPlaylists = ref<Playlist[]>([])
+const loadingMy = ref(true)
+const loadingPopular = ref(true)
 
 const showCreateModal = ref(false)
 const creating = ref(false)
@@ -172,38 +168,33 @@ const newPlaylist = ref({
   is_public: false,
 })
 
-const { data: myPlaylistsData, pending: pendingMy, refresh: refreshMy } = await useAsyncData(
-  'myPlaylists',
-  async () => {
-    const response = await getMy()
+const loadMyPlaylists = async () => {
+  loadingMy.value = true
+  try {
+    const response = await playlistsApi.getMy()
     if (response.success && response.data) {
-      return response.data
+      myPlaylists.value = response.data
     }
-    return []
-  },
-  { server: true }
-)
+  } catch (error) {
+    console.error('Failed to load my playlists:', error)
+  } finally {
+    loadingMy.value = false
+  }
+}
 
-const { data: popularPlaylistsData, pending: pendingPopular, refresh: refreshPopular } = await useAsyncData(
-  'popularPlaylists',
-  async () => {
-    const response = await getPopular()
+const loadPopularPlaylists = async () => {
+  loadingPopular.value = true
+  try {
+    const response = await playlistsApi.getPopular()
     if (response.success && response.data) {
-      return response.data
+      popularPlaylists.value = response.data
     }
-    return []
-  },
-  { server: true }
-)
-
-watchEffect(() => {
-  if (myPlaylistsData.value) {
-    myPlaylists.value = myPlaylistsData.value
+  } catch (error) {
+    console.error('Failed to load popular playlists:', error)
+  } finally {
+    loadingPopular.value = false
   }
-  if (popularPlaylistsData.value) {
-    popularPlaylists.value = popularPlaylistsData.value
-  }
-})
+}
 
 const goToPlaylist = (id: number) => {
   router.push(`/playlists/${id}`)
@@ -219,11 +210,11 @@ const createPlaylist = async () => {
   createError.value = ''
 
   try {
-    const response = await create(newPlaylist.value)
+    const response = await playlistsApi.create(newPlaylist.value)
     if (response.success && response.data) {
       showCreateModal.value = false
       newPlaylist.value = { name: '', description: '', is_public: false }
-      await refreshMy()
+      await loadMyPlaylists()
       router.push(`/playlists/${response.data.id}`)
     } else {
       createError.value = response.error || '创建失败'
@@ -237,9 +228,9 @@ const createPlaylist = async () => {
 
 const copyPlaylist = async (playlist: Playlist) => {
   try {
-    const response = await copy(playlist.id)
+    const response = await playlistsApi.copy(playlist.id)
     if (response.success) {
-      await refreshMy()
+      await loadMyPlaylists()
       alert(`已将 "${playlist.name}" 复制到您的播放列表中！`)
     } else {
       alert(response.error || '复制失败')
@@ -248,6 +239,11 @@ const copyPlaylist = async (playlist: Playlist) => {
     alert('复制播放列表时出错')
   }
 }
+
+onMounted(() => {
+  loadMyPlaylists()
+  loadPopularPlaylists()
+})
 </script>
 
 <style scoped>

@@ -1,10 +1,10 @@
 <template>
   <div>
-    <div v-if="pending" class="loading">
+    <div v-if="loading" class="loading">
       <div class="spinner"></div>
     </div>
 
-    <div v-else-if="error" class="error-message">{{ error }}</div>
+    <div v-else-if="errorMessage" class="error-message">{{ errorMessage }}</div>
 
     <div v-else-if="playlist">
       <div class="playlist-detail-header">
@@ -31,13 +31,13 @@
         <button class="btn btn-secondary" @click="showEditModal = true">
           编辑播放列表
         </button>
-        <button class="btn btn-danger" @click="confirmDeletePlaylist">
+        <button class="btn btn-danger" @click="handleDeletePlaylist">
           删除播放列表
         </button>
       </div>
 
       <div class="playlist-actions" v-else-if="playlist.is_public">
-        <button class="btn btn-primary" @click="copyPlaylist">
+        <button class="btn btn-primary" @click="handleCopyPlaylist">
           复制到我的播放列表
         </button>
       </div>
@@ -118,7 +118,7 @@
             :key="song.id"
             class="song-item"
             style="cursor: pointer;"
-            @click="addSongToPlaylist(song)"
+            @click="handleAddSong(song)"
           >
             <div class="song-cover-small">
               <img v-if="song.cover_url" :src="song.cover_url" alt="" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />
@@ -144,7 +144,7 @@
           <button class="modal-close" @click="showEditModal = false">&times;</button>
         </div>
 
-        <form @submit.prevent="updatePlaylist">
+        <form @submit.prevent="handleUpdatePlaylist">
           <div class="form-group">
             <label class="form-label">名称</label>
             <input 
@@ -198,56 +198,19 @@
 </template>
 
 <script setup lang="ts">
-interface Song {
-  id: number
-  name: string
-  artist: string
-  album: string
-  duration: number
-  cover_url: string
-  audio_file_url: string
-}
-
-interface Playlist {
-  id: number
-  name: string
-  description: string
-  is_public: boolean
-  owner_id: number
-  song_count?: number
-}
-
-interface PlaylistSongDetail {
-  song_id: number
-  name: string
-  artist: string
-  duration: number
-  position: number
-}
-
-interface PlaylistDetail {
-  playlist: Playlist | null
-  songs: PlaylistSongDetail[]
-  totalDuration: number
-  isOwner: boolean
-}
+import type { Song, Playlist, PlaylistSongDetail } from '~/composables/useApi'
 
 const route = useRoute()
 const router = useRouter()
-const { get: getPlaylist, getSongs, addSong, removeSong, updatePositions, update: updatePlaylistApi, delete: deletePlaylistApi, copy } = usePlaylistsApi()
-const { list: listSongs } = useSongsApi()
-
-const formatDuration = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
+const songsApi = useSongsApi()
+const playlistsApi = usePlaylistsApi()
 
 const songListRef = ref<HTMLElement | null>(null)
 const playlist = ref<Playlist | null>(null)
 const songs = ref<PlaylistSongDetail[]>([])
 const totalDuration = ref(0)
-const error = ref('')
+const loading = ref(true)
+const errorMessage = ref('')
 const isOwner = ref(false)
 
 const showAddSongModal = ref(false)
@@ -270,23 +233,19 @@ const editForm = ref({
 
 const currentUserId = 1
 
-const fetchPlaylistDetail = async (id: number): Promise<PlaylistDetail> => {
-  const result: PlaylistDetail = {
-    playlist: null,
-    songs: [],
-    totalDuration: 0,
-    isOwner: false,
-  }
+const loadPlaylist = async () => {
+  loading.value = true
+  errorMessage.value = ''
 
   try {
     const [playlistRes, songsRes] = await Promise.all([
-      getPlaylist(id),
-      getSongs(id),
+      playlistsApi.get(playlistId.value),
+      playlistsApi.getSongs(playlistId.value),
     ])
 
     if (playlistRes.success && playlistRes.data) {
-      result.playlist = playlistRes.data
-      result.isOwner = playlistRes.data.owner_id === currentUserId
+      playlist.value = playlistRes.data
+      isOwner.value = playlistRes.data.owner_id === currentUserId
       
       editForm.value = {
         name: playlistRes.data.name,
@@ -294,42 +253,24 @@ const fetchPlaylistDetail = async (id: number): Promise<PlaylistDetail> => {
         is_public: playlistRes.data.is_public,
       }
     } else {
-      error.value = playlistRes.error || '加载播放列表失败'
+      errorMessage.value = playlistRes.error || '加载播放列表失败'
     }
 
     if (songsRes.success && songsRes.data) {
-      result.songs = songsRes.data.songs
-      result.totalDuration = songsRes.data.total_duration
+      songs.value = songsRes.data.songs
+      totalDuration.value = songsRes.data.total_duration
     }
   } catch (err) {
-    error.value = '加载数据时出错'
+    errorMessage.value = '加载数据时出错'
+  } finally {
+    loading.value = false
   }
-
-  return result
 }
-
-const { data: playlistData, pending, refresh } = await useAsyncData(
-  'playlistDetail',
-  () => fetchPlaylistDetail(playlistId.value),
-  { 
-    server: true,
-    watch: [playlistId]
-  }
-)
-
-watchEffect(() => {
-  if (playlistData.value) {
-    playlist.value = playlistData.value.playlist
-    songs.value = playlistData.value.songs
-    totalDuration.value = playlistData.value.totalDuration
-    isOwner.value = playlistData.value.isOwner
-  }
-})
 
 const searchAvailableSongs = async () => {
   loadingAvailableSongs.value = true
   try {
-    const response = await listSongs(addSongSearch.value)
+    const response = await songsApi.list(addSongSearch.value)
     if (response.success && response.data) {
       const existingSongIds = new Set(songs.value.map(s => s.song_id))
       availableSongs.value = response.data.filter(s => !existingSongIds.has(s.id))
@@ -341,11 +282,11 @@ const searchAvailableSongs = async () => {
   }
 }
 
-const addSongToPlaylist = async (song: Song) => {
+const handleAddSong = async (song: Song) => {
   try {
-    const response = await addSong(playlistId.value, song.id)
+    const response = await playlistsApi.addSong(playlistId.value, song.id)
     if (response.success) {
-      await refresh()
+      await loadPlaylist()
     } else {
       alert(response.error || '添加失败')
     }
@@ -360,9 +301,9 @@ const handleRemoveSong = async (song: PlaylistSongDetail) => {
   }
 
   try {
-    const response = await removeSong(playlistId.value, song.song_id)
+    const response = await playlistsApi.removeSong(playlistId.value, song.song_id)
     if (response.success) {
-      await refresh()
+      await loadPlaylist()
     } else {
       alert(response.error || '移除失败')
     }
@@ -371,7 +312,7 @@ const handleRemoveSong = async (song: PlaylistSongDetail) => {
   }
 }
 
-const updatePlaylist = async () => {
+const handleUpdatePlaylist = async () => {
   if (!editForm.value.name.trim()) {
     alert('请输入播放列表名称')
     return
@@ -379,10 +320,10 @@ const updatePlaylist = async () => {
 
   savingEdit.value = true
   try {
-    const response = await updatePlaylistApi(playlistId.value, editForm.value)
+    const response = await playlistsApi.update(playlistId.value, editForm.value)
     if (response.success) {
       showEditModal.value = false
-      await refresh()
+      await loadPlaylist()
     } else {
       alert(response.error || '更新失败')
     }
@@ -393,13 +334,13 @@ const updatePlaylist = async () => {
   }
 }
 
-const confirmDeletePlaylist = async () => {
+const handleDeletePlaylist = async () => {
   if (!confirm('确定要删除这个播放列表吗？此操作无法撤销！')) {
     return
   }
 
   try {
-    const response = await deletePlaylistApi(playlistId.value)
+    const response = await playlistsApi.delete(playlistId.value)
     if (response.success) {
       router.push('/')
     } else {
@@ -410,11 +351,11 @@ const confirmDeletePlaylist = async () => {
   }
 }
 
-const copyPlaylist = async () => {
+const handleCopyPlaylist = async () => {
   if (!playlist.value) return
 
   try {
-    const response = await copy(playlistId.value)
+    const response = await playlistsApi.copy(playlistId.value)
     if (response.success) {
       alert(`已将 "${playlist.value.name}" 复制到您的播放列表中！`)
       router.push('/')
@@ -433,22 +374,30 @@ watch(() => showAddSongModal.value, (val) => {
   }
 })
 
+watch(playlistId, () => {
+  loadPlaylist()
+})
+
+onMounted(() => {
+  loadPlaylist()
+})
+
 if (import.meta.client) {
   nextTick(() => {
-    if (!songListRef.value) return
-
     let sortable: any = null
 
     const initSortable = async () => {
+      if (!songListRef.value) return
+      
       const { default: Sortable } = await import('sortablejs')
       
-      sortable = new Sortable(songListRef.value!, {
+      sortable = new Sortable(songListRef.value, {
         animation: 150,
         handle: '.drag-handle',
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
         onEnd: async (evt: any) => {
-          const items = songs.value
+          const items = [...songs.value]
           const oldIndex = evt.oldIndex
           const newIndex = evt.newIndex
 
@@ -466,8 +415,10 @@ if (import.meta.client) {
             position: item.position,
           }))
 
+          songs.value = items
+
           try {
-            await updatePositions(playlistId.value, positions)
+            await playlistsApi.updatePositions(playlistId.value, positions)
           } catch (error) {
             console.error('Failed to update positions:', error)
             alert('保存排序时出错，请重试')

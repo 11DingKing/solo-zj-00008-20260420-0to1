@@ -1,4 +1,4 @@
-interface Song {
+export interface Song {
   id: number
   name: string
   artist: string
@@ -8,7 +8,7 @@ interface Song {
   audio_file_url: string
 }
 
-interface Playlist {
+export interface Playlist {
   id: number
   name: string
   description: string
@@ -17,7 +17,7 @@ interface Playlist {
   song_count?: number
 }
 
-interface PlaylistSongDetail {
+export interface PlaylistSongDetail {
   song_id: number
   name: string
   artist: string
@@ -25,7 +25,7 @@ interface PlaylistSongDetail {
   position: number
 }
 
-interface ApiResponse<T = unknown> {
+export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T
   error?: string
@@ -33,86 +33,61 @@ interface ApiResponse<T = unknown> {
 
 const BASE_URL = '/api'
 
-const useApi = () => {
-  const request = async <T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> => {
-    try {
-      const response = await $fetch<ApiResponse<T>>(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers as Record<string, string>,
-        },
-      })
-      return response
-    } catch (error: any) {
-      return {
-        success: false,
-        error: error?.data?.error || error?.message || 'Network error',
-      }
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<ApiResponse<T>> {
+  try {
+    const response = await $fetch<ApiResponse<T>>(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string>),
+      },
+    })
+    return response
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error?.data?.error || error?.message || 'Network error',
     }
   }
-
-  const get = <T>(endpoint: string) => request<T>(endpoint, { method: 'GET' })
-  
-  const post = <T>(endpoint: string, body: unknown) =>
-    request<T>(endpoint, {
-      method: 'POST',
-      body,
-    })
-
-  const put = <T>(endpoint: string, body: unknown) =>
-    request<T>(endpoint, {
-      method: 'PUT',
-      body,
-    })
-
-  const del = <T>(endpoint: string) =>
-    request<T>(endpoint, { method: 'DELETE' })
-
-  return { get, post, put, del }
 }
 
-export const useSongsApi = () => {
-  const { get, post, put, del } = useApi()
-
+export function useSongsApi() {
   return {
     list: (search?: string) => 
-      get<Song[]>(search ? `/songs?search=${encodeURIComponent(search)}` : '/songs'),
-    get: (id: number) => get<Song>(`/songs/${id}`),
-    create: (song: Omit<Song, 'id'>) => post<{ id: number }>('/songs', song),
-    update: (id: number, song: Omit<Song, 'id'>) => put<void>(`/songs/${id}`, song),
-    delete: (id: number) => del<void>(`/songs/${id}`),
+      request<Song[]>(search ? `/songs?search=${encodeURIComponent(search)}` : '/songs', { method: 'GET' }),
+    get: (id: number) => request<Song>(`/songs/${id}`, { method: 'GET' }),
+    create: (song: Omit<Song, 'id'>) => request<{ id: number }>('/songs', { method: 'POST', body: song }),
+    update: (id: number, song: Omit<Song, 'id'>) => request<void>(`/songs/${id}`, { method: 'PUT', body: song }),
+    delete: (id: number) => request<void>(`/songs/${id}`, { method: 'DELETE' }),
   }
 }
 
-export const usePlaylistsApi = () => {
-  const { get, post, put, del } = useApi()
-
+export function usePlaylistsApi() {
   return {
-    getMy: () => get<Playlist[]>('/playlists/my'),
-    getPopular: () => get<Playlist[]>('/playlists/popular'),
-    get: (id: number) => get<Playlist>(`/playlists/${id}`),
+    getMy: () => request<Playlist[]>('/playlists/my', { method: 'GET' }),
+    getPopular: () => request<Playlist[]>('/playlists/popular', { method: 'GET' }),
+    get: (id: number) => request<Playlist>(`/playlists/${id}`, { method: 'GET' }),
     getSongs: (id: number) => 
-      get<{ songs: PlaylistSongDetail[]; total_duration: number }>(`/playlists/${id}/songs`),
+      request<{ songs: PlaylistSongDetail[]; total_duration: number }>(`/playlists/${id}/songs`, { method: 'GET' }),
     create: (playlist: { name: string; description: string; is_public: boolean }) =>
-      post<{ id: number }>('/playlists', playlist),
+      request<{ id: number }>('/playlists', { method: 'POST', body: playlist }),
     update: (id: number, playlist: { name: string; description: string; is_public: boolean }) =>
-      put<void>(`/playlists/${id}`, playlist),
-    delete: (id: number) => del<void>(`/playlists/${id}`),
+      request<void>(`/playlists/${id}`, { method: 'PUT', body: playlist }),
+    delete: (id: number) => request<void>(`/playlists/${id}`, { method: 'DELETE' }),
     addSong: (playlistId: number, songId: number) =>
-      post<void>(`/playlists/${playlistId}/songs`, { song_id: songId }),
+      request<void>(`/playlists/${playlistId}/songs`, { method: 'POST', body: { song_id: songId } }),
     removeSong: (playlistId: number, songId: number) =>
-      del<void>(`/playlists/${playlistId}/songs/${songId}`),
+      request<void>(`/playlists/${playlistId}/songs/${songId}`, { method: 'DELETE' }),
     updatePositions: (playlistId: number, positions: { song_id: number; position: number }[]) =>
-      put<void>(`/playlists/${playlistId}/positions`, positions),
-    copy: (id: number) => post<{ id: number }>(`/playlists/${id}/copy`, {}),
+      request<void>(`/playlists/${playlistId}/positions`, { method: 'PUT', body: positions }),
+    copy: (id: number) => request<{ id: number }>(`/playlists/${id}/copy`, { method: 'POST', body: {} }),
   }
 }
 
-export const formatDuration = (seconds: number): string => {
+export function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${mins}:${secs.toString().padStart(2, '0')}`
